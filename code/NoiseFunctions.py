@@ -203,3 +203,49 @@ def pixie_sens(nu, fsky=1.,duration=6., mult=1.):
     skysr = 4. * np.pi * (180. / np.pi) ** 2 * fsky
 
     return 10. ** template(np.log10(nu)) / np.sqrt(skysr) * np.sqrt(15. / duration) * mult * 1.e26
+
+
+def getnoise_map_domain_muK_arcmin(prefix, bands, dets, hemt_amps = True, hemt_freq = 10, precompute=False, 
+                        exposure_months=12.):
+    """
+    calculate map domain noise in muK-arcmin.
+
+    args:
+    prefix: file prefix for bolocalc calculator
+    bands: frequency bands [GHz]
+    dets: detector counts
+    hemt_amps: True/False
+    hemt_freq: below this frequency HEMTs will be used if hemt_amps set to True
+    precompute: sensitivity file (if precalculated, otherwise False)
+    exposure_months: integration time [months]
+
+    output:
+    frequencies [Hz]
+    sensitivity [muK*arcmin]
+
+    """
+    
+    
+    exposure_sec=365.25*24.*3600.*exposure_months/12. #seconds
+    sky_area_arcmin=4.*np.pi*(180./np.pi)**2*60.**2 #arcmin^2
+
+
+    if precompute:
+
+        noise=np.loadtxt(precompute, dtype=ndp)
+        freqs=noise[:,0]*1.e9 #Hz
+        noise_muK_rtsec=noise[:,1] #muK-rtSec
+
+    else:
+
+        bolos = GenBolos(bc_fp=bc_fp, exp_fp=exp_fp, band_edges=bands, file_prefix=prefix, hemt_amps=hemt_amps, hemt_freq=hemt_freq)
+        sensitivity_dict = bolos.calc_bolos()
+        noise_df = pd.DataFrame(sensitivity_dict).T
+        freqs=np.array(noise_df['Center Frequency'], dtype=ndp)*1.e9 #Hz
+        noise_muK_rtsec= np.array(noise_df['Detector NET_CMB'], dtype=ndp)#muK-rtSec
+
+
+    noise_muK_arcmin=noise_muK_rtsec/np.sqrt(exposure_sec)* np.sqrt(sky_area_arcmin) #muK*arcmin
+    noise=noise_muK_arcmin/np.sqrt(dets)
+
+    return freqs, noise
