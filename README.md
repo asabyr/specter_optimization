@@ -66,7 +66,7 @@ Before running any optimizations, it may be helpful to clean bolocalc-space dire
    The run will output: {FILE_PREFIX}sky_SNR_bias_run{RUN#}.txt in [/grid_files](/grid_files). 
 
 ## Other notes:
-For the calculations (2),(3),(4), it is best to split the calculations across cores/into some number of input combinations/output files N. This can be specified via the .ini file too. In this case, command line argument {RUN#} should be followed by another argument {n}, where n=0:N (see examples in [/job_files](/job_files)). Note that the project right now assumes a structure where `sd_foregrounds_optimize` and `bolocalc-space` are in a folder titled "software" and that you will need to modify the paths at the top of the scripts. For some examples on how to read the outputs, see [notebooks/examples.ipynb](notebooks/examples.ipynb).
+For the calculations (2),(3),(4), it is best to split the calculations across cores/into some number of input combinations/output files N. This can be specified via the .ini file too. In this case, command line argument {RUN#} should be followed by another argument {n}, where n=0:N (see examples in [/job_files](/job_files)). Note that the project right now assumes a structure where `sd_foregrounds_optimize` and `bolocalc-space` are in a folder titled "software" and that you will need to modify the paths at the top of the scripts. For some examples on how to read the outputs, see [notebooks/examples.ipynb](notebooks/examples.ipynb). If you use this code, please cite [Sabyr+2024a](https://arxiv.org/abs/2409.12188).
 
 
 Please feel free to contact [Alina Sabyr](as6131@columbia.edu) with any questions about the code or open a pull request.
