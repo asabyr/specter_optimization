@@ -1,3 +1,4 @@
+import sys
 import multiprocessing
 import astropy.units as u
 import healpy as hp
@@ -12,10 +13,11 @@ import pickle
 import sys
 
 DEG_TO_RAD=np.pi/180.0
+clight=299792458.0
 
-def compute_zodiacal(freq_Hz, model_type, NSIDE=256, date_obs="2025-01-01"):
+def compute_zodiacal_micron(wave_micron, model_type, NSIDE=256, date_obs="2025-01-01"):
     #get zodiacal light
-    model = zodipy.Model(freq_Hz * u.Hz, name=model_type, extrapolate=True)
+    model = zodipy.Model(wave_micron * u.micron, name=model_type, extrapolate=True)
     pixels = np.arange(hp.nside2npix(NSIDE))
     lon,lat=hp.pix2ang(NSIDE, pixels, lonlat=True)
     skycoord = SkyCoord(lon, lat, unit=u.deg, frame="galactic", obstime=Time(date_obs))
@@ -23,10 +25,20 @@ def compute_zodiacal(freq_Hz, model_type, NSIDE=256, date_obs="2025-01-01"):
 
     return emission, lon, lat
 
-def make_zodiacal_mask(freq_Hz, model_type='planck18', eclip_deg=15.0, NSIDE=256):
+def compute_zodiacal(freq_GHz, model_type, NSIDE=256, date_obs="2025-01-01"):
+    #get zodiacal light
+    model = zodipy.Model(freq_GHz * u.GHz, name=model_type, extrapolate=True)
+    pixels = np.arange(hp.nside2npix(NSIDE))
+    lon,lat=hp.pix2ang(NSIDE, pixels, lonlat=True)
+    skycoord = SkyCoord(lon, lat, unit=u.deg, frame="galactic", obstime=Time(date_obs))
+    emission=model.evaluate(skycoord, nprocesses=multiprocessing.cpu_count())
+
+    return emission, lon, lat
+
+def make_zodiacal_mask(freq_GHz, model_type='planck18', eclip_deg=15.0, NSIDE=256):
 
     #get zodiacal light
-    zd_light, lon_deg_G, lat_deg_G=compute_zodiacal(freq_Hz=freq_Hz, model_type=model_type, NSIDE=NSIDE)
+    zd_light, lon_deg_G, lat_deg_G=compute_zodiacal(freq_GHz=freq_GHz, model_type=model_type, NSIDE=NSIDE)
     
     #convert from G to E all the coordinates/pixels
     r_G_to_E=Rotator(coord=['G','E'])
@@ -50,15 +62,15 @@ def make_zodiacal_mask(freq_Hz, model_type='planck18', eclip_deg=15.0, NSIDE=256
     #check if makes sense with the emission
     zd_light[ec_mask]=0.0
     plt.figure()
-    hp.mollview(zd_light, unit="MJy/sr",coord=["G", "E"],title=f"Zodiacal light at {freq_Hz/(1e9)} Hz")
+    hp.mollview(zd_light, unit="MJy/sr",coord=["G", "E"],title=f"Zodiacal light at {freq_GHz} GHz")
     hp.graticule()
-    plt.savefig(f"../figs/{freq_Hz/(1e9)}_{model_type}_ec_mask_{eclip_deg}deg_E.pdf")
+    plt.savefig(f"../figs/{freq_GHz}_{model_type}_ec_mask_{eclip_deg}deg_E.pdf")
     
     #in galactic coord
     plt.figure()
-    hp.mollview(zd_light, unit="MJy/sr",coord=["G"],title=f"Zodiacal light at {freq_Hz/(1e9)} Hz")
+    hp.mollview(zd_light, unit="MJy/sr",coord=["G"],title=f"Zodiacal light at {freq_GHz} GHz")
     hp.graticule()
-    plt.savefig(f"../figs/{freq_Hz/(1e9)}_{model_type}_ec_mask_{eclip_deg}deg_G.pdf")
+    plt.savefig(f"../figs/{freq_GHz}_{model_type}_ec_mask_{eclip_deg}deg_G.pdf")
 
     #check actual mask
     plt.figure()
@@ -71,13 +83,16 @@ def make_zodiacal_mask(freq_Hz, model_type='planck18', eclip_deg=15.0, NSIDE=256
     hp.graticule()
     plt.savefig(f"../figs/ec_mask_{eclip_deg}deg_G.pdf")
 
-def compute_zd(freq_Hz, model_type='planck18', date_obs="2025-01-01", mask_sky_1='', mask_sky_2='', NSIDE=256, plot_all=False):
+def compute_zd(freq_GHz, model_type='planck18', date_obs="2025-01-01", mask_sky_1='', mask_sky_2='', NSIDE=256, plot_all=False):
     
     if len(mask_sky_1)==0:
         assert len(mask_sky_2)==0, "if no mask_sky_1 is provided, mask_sky_2 should also be an empty string"
-
-    zd_light_MJysr, lon_deg_G, lat_deg_G=compute_zodiacal(freq_Hz=freq_Hz, model_type=model_type, NSIDE=NSIDE, date_obs=date_obs)
-
+    
+    if 'planck' in model_type:
+        zd_light_MJysr, lon_deg_G, lat_deg_G=compute_zodiacal(freq_GHz=freq_GHz, model_type=model_type, NSIDE=NSIDE, date_obs=date_obs)
+    elif 'dirbe' in model_type:
+        wave_micron=clight/(freq_GHz*1e9)*1e6
+        zd_light_MJysr, lon_deg_G, lat_deg_G=compute_zodiacal_micron(wave_micron=wave_micron, model_type=model_type, NSIDE=NSIDE, date_obs=date_obs)
     if len(mask_sky_1)==0:
         if plot_all==True:
             #no masking
@@ -86,9 +101,9 @@ def compute_zd(freq_Hz, model_type='planck18', date_obs="2025-01-01", mask_sky_1
             zd_light_MJysr,
             unit="MJy/sr",
             cmap="afmhot",coord=["G", "E"],
-            title=f"Zodiacal light at {freq_Hz/(1e9)} Hz",
+            title=f"Zodiacal light at {freq_GHz} GHz",
             )
-            plt.savefig(f"../figs/{freq_Hz/(1e9)}_{model_type}_{date_obs}.pdf")
+            plt.savefig(f"../figs/{freq_GHz}_{model_type}_{date_obs}.pdf")
         return np.mean(zd_light_MJysr.value*1e6)
 
     elif len(mask_sky_1)>0:
@@ -120,9 +135,9 @@ def compute_zd(freq_Hz, model_type='planck18', date_obs="2025-01-01", mask_sky_1
             hp.mollview(plot_zd_light,
             unit="MJy/sr",
             cmap="afmhot",coord=["G", "E"],
-            title=f"Zodiacal light at {freq_Hz/(1e9)} Hz fsky={sky_frac}",
+            title=f"Zodiacal light at {freq_GHz} GHz fsky={sky_frac}",
             )
-            plt.savefig(f"../figs/{freq_Hz/(1e9)}_{model_type}_{mask_suffix_1}_{date_obs}.pdf")
+            plt.savefig(f"../figs/{freq_GHz}_{model_type}_{mask_suffix_1}_{date_obs}.pdf")
 
         return np.mean(masked_zd_light_MJysr.value*1e6)
     else:
@@ -166,9 +181,9 @@ def compute_zd(freq_Hz, model_type='planck18', date_obs="2025-01-01", mask_sky_1
             hp.mollview(plot_zd_light,
             unit="MJy/sr",
             cmap="afmhot",coord=["G", "E"],
-            title=f"Zodiacal light at {freq_Hz/(1e9)} Hz fsky={sky_frac}",
+            title=f"Zodiacal light at {freq_GHz} GHz fsky={sky_frac}",
             )
-            plt.savefig(f"../figs/{freq_Hz/(1e9)}_{model_type}_{mask_suffix_1}_{mask_suffix_2}_{date_obs}.pdf")
+            plt.savefig(f"../figs/{freq_GHz}_{model_type}_{mask_suffix_1}_{mask_suffix_2}_{date_obs}.pdf")
 
         return np.mean(masked_zd_light_MJysr.value*1e6)
 
